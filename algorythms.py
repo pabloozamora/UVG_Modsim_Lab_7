@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Callable, Tuple, List
 
-def backtracking_line_search(f, df, xk, pk, alpha = 1.0, rho = 0.5, c = 1e-4) -> float:
+def backtracking_line_search(f, df, xk, pk, alpha = 1.0, rho = 0.5, c = 1e-4):
     fk = f(xk)
     grad_fk = df(xk)
     while f(xk + alpha * pk) > fk + c * alpha * np.dot(grad_fk, pk):
@@ -66,6 +66,17 @@ def max_naive(f, df, x0, alpha, max_iter, epsilon):
 
     return x_hist[-1], x_hist, f_hist, err_hist, max_iter, False
 
+def aprox_hes(df, x, epsilon = 1e-5):
+    n = x.shape[0]
+    H = np.zeros((n, n))
+    df_x = df(x)
+    for i in range(n):
+        x_eps = x.copy()
+        x_eps[i] += epsilon
+        df_x_eps = df(x_eps)
+        H[:, i] = (df_x_eps - df_x) / epsilon
+    return H
+
 def gradiente_newton_aprox(f, df, x0, alpha, max_iter, epsilon):
     xk = x0.copy()
     x_hist = [xk.copy()]
@@ -74,22 +85,15 @@ def gradiente_newton_aprox(f, df, x0, alpha, max_iter, epsilon):
 
     for k in range(max_iter):
         grad = df(xk)
-        
-        n = xk.shape[0]
-        df_x = df(xk)
-        
-        e = np.eye(n) * 1e-5
-        
-        H_approx = np.array([(df(xk + e[i]) - df_x) / epsilon for i in range(n)]).T
+        H_approx = aprox_hes(df, xk)
         
         try:
-            delta_xk = np.linalg.solve(H_approx, grad)
+            delta_xk = -alpha * np.linalg.solve(H_approx, grad)
         except np.linalg.LinAlgError:
-            delta_xk = grad
-            
-        alpha = backtracking_line_search(f, df, xk, delta_xk)
+            delta_xk = -alpha * grad
 
-        xk_1 = xk - alpha * delta_xk
+        alpha = backtracking_line_search(f, df, xk, delta_xk)
+        xk_1 = xk + alpha * delta_xk
         x_hist.append(xk_1.copy())
         f_1 = f(xk_1)
         f_hist.append(f_1)
@@ -103,7 +107,7 @@ def gradiente_newton_aprox(f, df, x0, alpha, max_iter, epsilon):
 
     return x_hist[-1], x_hist, f_hist, err_hist, max_iter, False
 
-def gradiente_newton_exact(f, df, ddf, x0, alpha, max_iter, epsilon):
+def gradiente_newton_exact(f, df, ddf, x0, alpha, max_iter: int, epsilon) -> Tuple[np.ndarray, List[np.ndarray], List[float], List[float], int, bool]:
     xk = x0.copy()
     x_hist = [xk.copy()]
     f_hist = [f(x0)]
@@ -114,12 +118,12 @@ def gradiente_newton_exact(f, df, ddf, x0, alpha, max_iter, epsilon):
         Hessian = ddf(xk)
         
         try:
-            delta_xk = np.linalg.solve(Hessian, grad)
+            delta_xk = -alpha * np.linalg.solve(Hessian, grad)
         except np.linalg.LinAlgError:
-            delta_xk = grad
+            delta_xk = -alpha * grad
 
         alpha = backtracking_line_search(f, df, xk, delta_xk)
-        xk_1 = xk - alpha * delta_xk
+        xk_1 = xk + alpha * delta_xk
         x_hist.append(xk_1.copy())
         f_1 = f(xk_1)
         f_hist.append(f_1)

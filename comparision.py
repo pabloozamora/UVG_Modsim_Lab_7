@@ -29,7 +29,7 @@ def find_optimal_alpha(algorithm, f, df, x0, alpha_range, max_iter, epsilon):
 def test_optimization_algorithms(objective_functions):
     algorithms = [descenso_aleatorio, max_naive, gradiente_newton_aprox, gradiente_newton_exact]
     alpha_range = [0.001, 0.01, 0.1, 0.5, 1.0]
-    max_iter = 1000
+    max_iter = 100
     epsilon = 1e-6
     
     results = []
@@ -39,9 +39,9 @@ def test_optimization_algorithms(objective_functions):
             optimal_alpha = find_optimal_alpha(algorithm, f, df, x0, alpha_range, max_iter, epsilon)
             
             if algorithm.__name__ == 'gradiente_newton_exact':
-                x_final, x_hist, _, err_hist, iterations, converged = algorithm(f, df, ddf, x0, optimal_alpha, max_iter, epsilon)
+                x_final, x_hist, f_hist, err_hist, iterations, converged = algorithm(f, df, ddf, x0, optimal_alpha, max_iter, epsilon)
             else:
-                x_final, x_hist, _, err_hist, iterations, converged = algorithm(f, df, x0, optimal_alpha, max_iter, epsilon)
+                x_final, x_hist, f_hist, err_hist, iterations, converged = algorithm(f, df, x0, optimal_alpha, max_iter, epsilon)
             
             gradients = [np.linalg.norm(df(x)) for x in x_hist]
             
@@ -54,8 +54,11 @@ def test_optimization_algorithms(objective_functions):
                     'Función': f.__name__,
                     'No. Iteración': i + 1,
                     'X Final': x_hist[i],
+                    'F(X) Final': f_hist[i],
+                    'Converge': converged,
                     'Error Aproximado': err_hist[i] if i < len(err_hist) else None,
-                    'Gradiente Normal': gradients[i]
+                    'Gradiente Normal': gradients[i],
+                    'Alfa óptimo': optimal_alpha,
                 })
     
     df_results = pd.DataFrame(results)
