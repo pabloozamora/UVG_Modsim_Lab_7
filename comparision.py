@@ -1,71 +1,85 @@
 import numpy as np
 import pandas as pd
-from typing import Callable, List, Tuple
+import matplotlib.pyplot as plt
 from tabulate import tabulate
+from algorythms import *
 
-from algorythms import (
-    descenso_aleatorio, max_naive, gradiente_newton_aprox, 
-    gradiente_newton_exact
-)
+# Definir los algoritmos a utilizar
+algorithms = [descenso_aleatorio, max_naive, gradiente_newton_aprox, gradiente_newton_exact]
 
-def find_optimal_alpha(algorithm, f, df, x0, alpha_range, max_iter, epsilon):
-    best_alpha = alpha_range[0]
-    best_error = float('inf')
+def generate_table_and_plots(f, df, ddf, x0, alpha, max_iterations, epsilon):
+    results_summary = []
     
-    for alpha in alpha_range:
-        if algorithm.__name__ == 'gradiente_newton_exact':
-            _, _, _, err_hist, _, _ = algorithm(f, df, lambda x: np.eye(len(x0)), x0, alpha, max_iter, epsilon)
+    # Iterar sobre cada algoritmo
+    for alg in algorithms:
+        algorythm_name = alg.__name__
+        
+        if algorythm_name == "gradiente_newton_exact":
+            x_optimal, path_xk, path_fxk, error_history, total_iters, has_converged = alg(f, df, ddf, x0, alpha, max_iterations, epsilon)
         else:
-            _, _, _, err_hist, _, _ = algorithm(f, df, x0, alpha, max_iter, epsilon)
+            x_optimal, path_xk, path_fxk, error_history, total_iters, has_converged = alg(f, df, x0, alpha, max_iterations, epsilon)
         
-        final_error = err_hist[-1] if err_hist else float('inf')
+        # Obtener primeras y últimas tres iteraciones
+        first_iters = path_xk[:3]
+        last_iters = path_xk[-3:]
         
-        if final_error < best_error:
-            best_error = final_error
-            best_alpha = alpha
+        # Cálculo de errores y normas de gradiente
+        approximation_errors = [np.linalg.norm(x - x_optimal) for x in first_iters + last_iters]
+        gradient_norms = [np.linalg.norm(df(x)) for x in first_iters + last_iters]
+        
+        # Preparar la tabla
+        method_table = []
+        for idx, (x_val, error_val, grad_norm_val) in enumerate(zip(first_iters + last_iters, approximation_errors, gradient_norms)):
+            iter_number = idx + 1 if idx < 3 else total_iters - 2 + idx % 3
+            method_table.append([algorythm_name, iter_number, x_val, error_val, grad_norm_val])
+        
+        results_summary.append((algorythm_name, error_history, method_table, path_xk))
     
-    return best_alpha
-
-def test_optimization_algorithms(objective_functions):
-    algorithms = [descenso_aleatorio, max_naive, gradiente_newton_aprox, gradiente_newton_exact]
-    alpha_range = [0.001, 0.01, 0.1, 0.5, 1.0]
-    max_iter = 100
-    epsilon = 1e-6
+    # Mostrar la tabla consolidada
+    combined_table = [row for _, _, table, _ in results_summary for row in table]
+    print(tabulate(combined_table, headers=["Algoritmo", "Iteración", "Valor de X", "Error Aproximado", "Norma del Gradiente"]))
     
-    results = []
+    # Generar gráficos
+    plt.figure(figsize=(10, 6))
+    for algorythm_name, error_history, _, _ in results_summary:
+        plt.semilogy(range(1, len(error_history) + 1), error_history, label=algorythm_name)
     
-    for f, df, ddf, x0 in objective_functions:
-        for algorithm in algorithms:
-            optimal_alpha = find_optimal_alpha(algorithm, f, df, x0, alpha_range, max_iter, epsilon)
-            
-            if algorithm.__name__ == 'gradiente_newton_exact':
-                x_final, x_hist, f_hist, err_hist, iterations, converged = algorithm(f, df, ddf, x0, optimal_alpha, max_iter, epsilon)
-            else:
-                x_final, x_hist, f_hist, err_hist, iterations, converged = algorithm(f, df, x0, optimal_alpha, max_iter, epsilon)
-            
-            gradients = [np.linalg.norm(df(x)) for x in x_hist]
-            
-            # Guardamos las primeras 3 y últimas 3 iteraciones
-            iterations_to_show = list(range(min(3, iterations))) + list(range(max(0, iterations-3), iterations))
-            
-            for i in iterations_to_show:
-                results.append({
-                    'Algoritmo': algorithm.__name__,
-                    'Función': f.__name__,
-                    'No. Iteración': i + 1,
-                    'X Final': x_hist[i],
-                    'F(X) Final': f_hist[i],
-                    'Converge': converged,
-                    'Error Aproximado': err_hist[i] if i < len(err_hist) else None,
-                    'Gradiente Normal': gradients[i],
-                    'Alfa óptimo': optimal_alpha,
-                })
+    plt.xlabel("Iteración")
+    plt.ylabel("Error Aproximado (escala log)")
+    plt.title("Comparativa del error en los algoritmos")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
     
-    df_results = pd.DataFrame(results)
-    
-    # Formatear la tabla para una mejor visualización
-    df_results['X Final'] = df_results['X Final'].apply(lambda x: np.array2string(x, precision=4, suppress_small=True))
-    df_results['Error Aproximado'] = df_results['Error Aproximado'].apply(lambda x: f'{x:.6e}' if x is not None else None)
-    df_results['Gradiente Normal'] = df_results['Gradiente Normal'].apply(lambda x: f'{x:.6e}')
-    
-    print(tabulate(df_results, headers='keys', tablefmt='grid', showindex=False))
+    # Graficar el recorrido de los puntos para problemas en R^2
+    if len(x0) == 2:
+        plt.figure(figsize=(10, 8))
+        
+        # Obtener el rango de valores para graficar
+        all_traj_points = [point for _, _, _, traj in results_summary for point in traj]
+        x_min, x_max = min(p[0] for p in all_traj_points), max(p[0] for p in all_traj_points)
+        y_min, y_max = min(p[1] for p in all_traj_points), max(p[1] for p in all_traj_points)
+        
+        padding_x = (x_max - x_min) * 0.1
+        padding_y = (y_max - y_min) * 0.1
+        x_min, x_max = x_min - padding_x, x_max + padding_x
+        y_min, y_max = y_min - padding_y, y_max + padding_y
+        
+        # Crear la malla para el gráfico de contorno
+        x_values = np.linspace(x_min, x_max, 100)
+        y_values = np.linspace(y_min, y_max, 100)
+        X, Y = np.meshgrid(x_values, y_values)
+        Z = np.array([f(np.array([xi, yi])) for xi, yi in zip(X.flatten(), Y.flatten())]).reshape(X.shape)
+        
+        plt.contour(X, Y, Z, levels=20, cmap='viridis')
+        plt.colorbar(label="f(x)")
+        
+        # Graficar la secuencia de puntos de cada algoritmo
+        for algorythm_name, _, _, traj in results_summary:
+            plt.plot([point[0] for point in traj], [point[1] for point in traj], label=algorythm_name)
+        
+        plt.xlabel("x")
+        plt.ylabel("y")
+        plt.title("Trayectoria de puntos por los algoritmos")
+        plt.legend()
+        plt.show()
