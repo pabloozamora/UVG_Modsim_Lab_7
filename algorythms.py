@@ -51,7 +51,7 @@ def max_naive(f, df, x0, alpha, max_iter, epsilon):
         
         alpha = backtracking_line_search(f, df, xk, -grad)
         
-        xk_1 = xk - alpha * grad
+        xk_1 = xk + alpha * (-grad)
         x_hist.append(xk_1.copy())
         f_1 = f(xk_1)
         f_hist.append(f_1)
